@@ -19,6 +19,8 @@ create table items (
 create table checkouts (
   id uuid primary key default uuid_generate_v4(),
   borrower_name text not null,
+  borrower_email text,
+  borrower_phone text,
   checked_out_by text not null,
   checked_out_at timestamptz not null default now(),
   expected_return_at timestamptz,

@@ -39,7 +39,9 @@ function nextAssetTag(category, items) {
   return `${prefix}-${String(next).padStart(3, '0')}`
 }
 
-const BLANK = { category: '', name: '', size: '', quantity: 1, storage_location: '', notes: '' }
+const BLANK      = { category: '', name: '', size: '', quantity: 1, storage_location: '', notes: '' }
+const BLANK_EDIT = { size: '', condition: 'good', storage_location: '', notes: '' }
+const BLANK_BULK = { condition: '', storage_location: '', notes: '' }
 
 export default function Inventory() {
   const [items, setItems] = useState([])
@@ -50,6 +52,20 @@ export default function Inventory() {
   const [error, setError] = useState(null)
   const [conditionFilter, setConditionFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState(BLANK_EDIT)
+  const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(null)
+
+  // Multi-select
+  const [selectedIds, setSelectedIds] = useState(new Set())
+  const [lastSelectedIdx, setLastSelectedIdx] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragAnchorIdx, setDragAnchorIdx] = useState(null)
+  const [bulkEditMode, setBulkEditMode] = useState(false)
+  const [bulkForm, setBulkForm] = useState(BLANK_BULK)
+  const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false)
+  const [bulkSaving, setBulkSaving] = useState(false)
 
   async function fetchItems() {
     const { data, err } = await supabase.from('items').select('*').order('name')
@@ -59,8 +75,17 @@ export default function Inventory() {
 
   useEffect(() => { fetchItems() }, [])
 
-  const catalogItems = form.category ? CATALOG[form.category]?.items || [] : []
-  const catalogSizes = form.category ? CATALOG[form.category]?.sizes || [] : []
+  useEffect(() => {
+    const onUp = () => setIsDragging(false)
+    document.addEventListener('mouseup', onUp)
+    return () => document.removeEventListener('mouseup', onUp)
+  }, [])
+
+  const catalogItems  = form.category ? CATALOG[form.category]?.items || [] : []
+  const catalogSizes  = form.category ? CATALOG[form.category]?.sizes || [] : []
+  const editCatalogSizes = editingId
+    ? CATALOG[items.find(i => i.id === editingId)?.category]?.sizes || []
+    : []
 
   function setField(field, value) {
     setForm(prev => {
@@ -70,12 +95,50 @@ export default function Inventory() {
     })
   }
 
+  function startEdit(item) {
+    setEditingId(item.id)
+    setEditForm({
+      size: item.size || '',
+      condition: item.condition || 'good',
+      storage_location: item.storage_location || '',
+      notes: item.notes || '',
+    })
+    setShowForm(false)
+    setConfirmDelete(null)
+    setBulkEditMode(false)
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditForm(BLANK_EDIT)
+  }
+
+  async function handleEdit(e) {
+    e.preventDefault()
+    setSaving(true)
+    const { error: err } = await supabase
+      .from('items')
+      .update({
+        size: editForm.size || null,
+        condition: editForm.condition,
+        storage_location: editForm.storage_location.trim() || null,
+        notes: editForm.notes.trim() || null,
+      })
+      .eq('id', editingId)
+    if (!err) { setEditingId(null); fetchItems() }
+    setSaving(false)
+  }
+
+  async function handleDelete(id) {
+    const { error: err } = await supabase.from('items').delete().eq('id', id)
+    if (!err) { setConfirmDelete(null); fetchItems() }
+  }
+
   async function handleAdd(e) {
     e.preventDefault()
     if (!form.category || !form.name) return
     setSubmitting(true)
     setError(null)
-
     const qty = Math.max(1, parseInt(form.quantity) || 1)
     const toInsert = []
     for (let i = 0; i < qty; i++) {
@@ -88,9 +151,7 @@ export default function Inventory() {
         notes: form.notes.trim() || null,
       })
     }
-
     const { error: err } = await supabase.from('items').insert(toInsert)
-
     if (err) {
       setError(err.message)
     } else {
@@ -101,6 +162,69 @@ export default function Inventory() {
     setSubmitting(false)
   }
 
+  // ── Multi-select handlers ────────────────────────────
+
+  function handleRowMouseDown(e, idx) {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+    setIsDragging(true)
+    setDragAnchorIdx(idx)
+    setSelectedIds(new Set([filtered[idx].id]))
+    setLastSelectedIdx(idx)
+    e.preventDefault()
+  }
+
+  function handleRowMouseEnter(idx) {
+    if (!isDragging) return
+    const start = Math.min(dragAnchorIdx, idx)
+    const end   = Math.max(dragAnchorIdx, idx)
+    setSelectedIds(new Set(filtered.slice(start, end + 1).map(i => i.id)))
+  }
+
+  function handleRowClick(e, idx) {
+    const id = filtered[idx].id
+    if (e.metaKey || e.ctrlKey) {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id); else next.add(id)
+        return next
+      })
+      setLastSelectedIdx(idx)
+    } else if (e.shiftKey && lastSelectedIdx !== null) {
+      const start = Math.min(lastSelectedIdx, idx)
+      const end   = Math.max(lastSelectedIdx, idx)
+      setSelectedIds(new Set(filtered.slice(start, end + 1).map(i => i.id)))
+    } else {
+      setSelectedIds(new Set())
+      setLastSelectedIdx(null)
+    }
+  }
+
+  async function handleBulkEdit(e) {
+    e.preventDefault()
+    setBulkSaving(true)
+    const updates = {}
+    if (bulkForm.condition)                   updates.condition        = bulkForm.condition
+    if (bulkForm.storage_location.trim())     updates.storage_location = bulkForm.storage_location.trim()
+    if (bulkForm.notes.trim())                updates.notes            = bulkForm.notes.trim()
+    if (Object.keys(updates).length > 0) {
+      await supabase.from('items').update(updates).in('id', [...selectedIds])
+    }
+    setBulkEditMode(false)
+    setBulkForm(BLANK_BULK)
+    setSelectedIds(new Set())
+    fetchItems()
+    setBulkSaving(false)
+  }
+
+  async function handleBulkDelete() {
+    await supabase.from('items').delete().in('id', [...selectedIds])
+    setBulkConfirmDelete(false)
+    setSelectedIds(new Set())
+    fetchItems()
+  }
+
+  // ────────────────────────────────────────────────────
+
   const filtered = items.filter(item => {
     if (conditionFilter !== 'all' && item.condition !== conditionFilter) return false
     if (!search) return true
@@ -108,12 +232,14 @@ export default function Inventory() {
     return (
       item.name.toLowerCase().includes(q) ||
       (item.category || '').toLowerCase().includes(q) ||
-      (item.size || '').toLowerCase().includes(q) ||
+      (item.size     || '').toLowerCase().includes(q) ||
       (item.asset_tag || '').toLowerCase().includes(q)
     )
   })
 
   if (loading) return <div className="loading">Loading...</div>
+
+  const editingItem = items.find(i => i.id === editingId)
 
   return (
     <div className="view">
@@ -130,17 +256,18 @@ export default function Inventory() {
             <option value="all">All conditions</option>
             <option value="good">Good</option>
             <option value="damaged">Damaged</option>
-            <option value="retired">Retired / lost</option>
+            <option value="retired">Lost/unknown</option>
           </select>
         </div>
-        <button className="btn primary" onClick={() => { setShowForm(v => !v); setError(null) }}>
-          {showForm ? 'Cancel' : '+ Add Item'}
+        <button className="btn primary" onClick={() => { setShowForm(v => !v); setError(null); cancelEdit(); setBulkEditMode(false) }}>
+          {showForm ? 'Cancel' : '+ Add gear'}
         </button>
       </div>
 
+      {/* Add form */}
       {showForm && (
         <div className="card">
-          <h3>Add Item</h3>
+          <h3>Add gear</h3>
           {error && <div className="form-error">{error}</div>}
           <form onSubmit={handleAdd} className="add-item-form">
             <div className="field">
@@ -150,7 +277,6 @@ export default function Inventory() {
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-
             <div className="field">
               <label>Item *</label>
               {catalogItems.length > 0 ? (
@@ -162,7 +288,6 @@ export default function Inventory() {
                 <input type="text" value={form.name} onChange={e => setField('name', e.target.value)} placeholder="Item name" disabled={!form.category} />
               )}
             </div>
-
             {catalogSizes.length > 0 && catalogSizes[0] !== 'N/A' && (
               <div className="field">
                 <label>Size</label>
@@ -172,24 +297,14 @@ export default function Inventory() {
                 </select>
               </div>
             )}
-
             <div className="field">
               <label>Quantity</label>
-              <input
-                type="number"
-                className="qty-input"
-                value={form.quantity}
-                min={1}
-                max={50}
-                onChange={e => setField('quantity', e.target.value)}
-              />
+              <input type="number" className="qty-input" value={form.quantity} min={1} max={50} onChange={e => setField('quantity', e.target.value)} />
             </div>
-
             <div className="field">
               <label>Location</label>
               <input type="text" value={form.storage_location} onChange={e => setField('storage_location', e.target.value)} placeholder="e.g. Back room shelf B" />
             </div>
-
             <div className="field form-actions">
               <button type="submit" className="btn primary" disabled={!form.category || !form.name || submitting}>
                 {submitting ? 'Adding...' : `Add${form.quantity > 1 ? ` ${form.quantity}` : ''}`}
@@ -199,9 +314,98 @@ export default function Inventory() {
         </div>
       )}
 
+      {/* Single edit form */}
+      {editingItem && (
+        <div className="card">
+          <h3>Edit — {editingItem.asset_tag && <span className="mono muted">{editingItem.asset_tag} </span>}{editingItem.name}</h3>
+          <form onSubmit={handleEdit} className="add-item-form">
+            {editCatalogSizes.length > 0 && editCatalogSizes[0] !== 'N/A' && (
+              <div className="field">
+                <label>Size</label>
+                <select className="select" value={editForm.size} onChange={e => setEditForm(f => ({ ...f, size: e.target.value }))}>
+                  <option value="">No size</option>
+                  {editCatalogSizes.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="field">
+              <label>Condition</label>
+              <select className="select" value={editForm.condition} onChange={e => setEditForm(f => ({ ...f, condition: e.target.value }))}>
+                <option value="good">Good</option>
+                <option value="damaged">Damaged</option>
+                <option value="retired">Lost/unknown</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Location</label>
+              <input type="text" value={editForm.storage_location} onChange={e => setEditForm(f => ({ ...f, storage_location: e.target.value }))} placeholder="e.g. Back room shelf B" />
+            </div>
+            <div className="field">
+              <label>Notes</label>
+              <input type="text" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any notes" />
+            </div>
+            <div className="field form-actions">
+              <button type="submit" className="btn primary" disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+              <button type="button" className="btn" onClick={cancelEdit}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Bulk edit form */}
+      {bulkEditMode && (
+        <div className="card">
+          <h3>Edit {selectedIds.size} items</h3>
+          <p className="form-hint">Only filled fields will be updated. Leave blank to keep existing values.</p>
+          <form onSubmit={handleBulkEdit} className="add-item-form">
+            <div className="field">
+              <label>Condition</label>
+              <select className="select" value={bulkForm.condition} onChange={e => setBulkForm(f => ({ ...f, condition: e.target.value }))}>
+                <option value="">— no change —</option>
+                <option value="good">Good</option>
+                <option value="damaged">Damaged</option>
+                <option value="retired">Lost/unknown</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Location</label>
+              <input type="text" value={bulkForm.storage_location} onChange={e => setBulkForm(f => ({ ...f, storage_location: e.target.value }))} placeholder="Leave blank to keep existing" />
+            </div>
+            <div className="field">
+              <label>Notes</label>
+              <input type="text" value={bulkForm.notes} onChange={e => setBulkForm(f => ({ ...f, notes: e.target.value }))} placeholder="Leave blank to keep existing" />
+            </div>
+            <div className="field form-actions">
+              <button type="submit" className="btn primary" disabled={bulkSaving}>{bulkSaving ? 'Saving...' : `Update ${selectedIds.size} items`}</button>
+              <button type="button" className="btn" onClick={() => setBulkEditMode(false)}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && !bulkEditMode && (
+        <div className={`bulk-bar${bulkConfirmDelete ? ' confirming' : ''}`}>
+          {bulkConfirmDelete ? (
+            <>
+              <span className="bulk-count">Remove {selectedIds.size} item{selectedIds.size !== 1 ? 's' : ''}?</span>
+              <button className="btn danger" onClick={handleBulkDelete}>Yes, remove</button>
+              <button className="btn" onClick={() => setBulkConfirmDelete(false)}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <span className="bulk-count">{selectedIds.size} selected</span>
+              <button className="btn" onClick={() => { setBulkEditMode(true); cancelEdit(); setShowForm(false) }}>Edit</button>
+              <button className="btn danger" onClick={() => setBulkConfirmDelete(true)}>Delete</button>
+              <button className="btn-link" onClick={() => { setSelectedIds(new Set()); setLastSelectedIdx(null) }}>Clear</button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="inventory-count">{filtered.length} item{filtered.length !== 1 ? 's' : ''}</div>
 
-      <table className="table">
+      <table className={`table${isDragging ? ' no-select' : ''}`}>
         <thead>
           <tr>
             <th>Tag</th>
@@ -210,28 +414,56 @@ export default function Inventory() {
             <th>Size</th>
             <th>Condition</th>
             <th>Location</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
-          {filtered.map(item => (
-            <tr key={item.id}>
+          {filtered.map((item, idx) => (
+            <tr
+              key={item.id}
+              className={[
+                editingId === item.id    ? 'row-editing'  : '',
+                selectedIds.has(item.id) ? 'row-selected' : '',
+              ].filter(Boolean).join(' ')}
+              onMouseDown={e => handleRowMouseDown(e, idx)}
+              onMouseEnter={() => handleRowMouseEnter(idx)}
+              onClick={e => handleRowClick(e, idx)}
+            >
               <td className="mono muted">{item.asset_tag || '—'}</td>
               <td>{item.name}</td>
               <td className="muted">{item.category || '—'}</td>
               <td className="muted">{item.size || '—'}</td>
               <td>
                 <span className={`badge ${
-                  item.condition === 'good' ? 'success' :
-                  item.condition === 'damaged' ? 'danger' : 'muted'
+                  item.condition === 'good'    ? 'success' :
+                  item.condition === 'damaged' ? 'danger'  : 'muted'
                 }`}>
-                  {item.condition.charAt(0).toUpperCase() + item.condition.slice(1)}
+                  {item.condition === 'retired' ? 'Lost/unknown' : item.condition.charAt(0).toUpperCase() + item.condition.slice(1)}
                 </span>
               </td>
               <td className="muted">{item.storage_location || '—'}</td>
+              <td
+                className="row-actions"
+                onClick={e => e.stopPropagation()}
+                onMouseDown={e => e.stopPropagation()}
+              >
+                {confirmDelete === item.id ? (
+                  <>
+                    <span className="muted" style={{ fontSize: '0.8rem' }}>Remove?</span>
+                    <button className="btn-link danger" onClick={() => handleDelete(item.id)}>Yes</button>
+                    <button className="btn-link" onClick={() => setConfirmDelete(null)}>No</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn-link" onClick={() => startEdit(item)}>Edit</button>
+                    <button className="btn-link danger" onClick={() => { setConfirmDelete(item.id); cancelEdit() }}>Remove</button>
+                  </>
+                )}
+              </td>
             </tr>
           ))}
           {filtered.length === 0 && (
-            <tr><td colSpan={6} className="empty">No items found</td></tr>
+            <tr><td colSpan={7} className="empty">No items found</td></tr>
           )}
         </tbody>
       </table>

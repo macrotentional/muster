@@ -10,6 +10,8 @@ export default function CheckOut({ onDone }) {
   const [selected, setSelected] = useState(new Set())
   const [search, setSearch] = useState('')
   const [borrower, setBorrower] = useState('')
+  const [borrowerEmail, setBorrowerEmail] = useState('')
+  const [borrowerPhone, setBorrowerPhone] = useState('')
   const [staffName, setStaffName] = useState('')
   const [returnDate, setReturnDate] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -50,13 +52,16 @@ export default function CheckOut({ onDone }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (selected.size === 0 || !borrower.trim() || !staffName.trim()) return
+    const hasContact = borrowerEmail.trim() || borrowerPhone.trim()
+    if (selected.size === 0 || !borrower.trim() || !staffName.trim() || !hasContact) return
     setSubmitting(true)
 
     const { data: checkout, error: checkoutError } = await supabase
       .from('checkouts')
       .insert({
         borrower_name: borrower.trim(),
+        borrower_email: borrowerEmail.trim() || null,
+        borrower_phone: borrowerPhone.trim() || null,
         checked_out_by: staffName.trim(),
         expected_return_at: returnDate || null,
       })
@@ -152,7 +157,7 @@ export default function CheckOut({ onDone }) {
 
         <form onSubmit={handleSubmit}>
           <div className="field">
-            <label>Borrower *</label>
+            <label>Borrower name *</label>
             <input
               type="text"
               value={borrower}
@@ -161,6 +166,25 @@ export default function CheckOut({ onDone }) {
               placeholder="Who is taking these?"
             />
           </div>
+          <div className="field">
+            <label>Email</label>
+            <input
+              type="email"
+              value={borrowerEmail}
+              onChange={e => setBorrowerEmail(e.target.value)}
+              placeholder="borrower@example.com"
+            />
+          </div>
+          <div className="field">
+            <label>Phone</label>
+            <input
+              type="tel"
+              value={borrowerPhone}
+              onChange={e => setBorrowerPhone(e.target.value)}
+              placeholder="e.g. 555-0100"
+            />
+          </div>
+          <p className="form-hint">At least one contact method (email or phone) is required.</p>
           <div className="field">
             <label>Staff *</label>
             <input
@@ -183,7 +207,7 @@ export default function CheckOut({ onDone }) {
           <button
             type="submit"
             className="btn primary"
-            disabled={selected.size === 0 || !borrower.trim() || !staffName.trim() || submitting}
+            disabled={selected.size === 0 || !borrower.trim() || !staffName.trim() || (!borrowerEmail.trim() && !borrowerPhone.trim()) || submitting}
           >
             {submitting ? 'Processing...' : `Check Out${selected.size > 0 ? ` (${selected.size})` : ''}`}
           </button>

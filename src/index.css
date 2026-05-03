@@ -253,6 +253,40 @@ body {
 
 .table tbody tr.row-out { background: #E4E4EB; }
 .table tbody tr.row-out td { color: var(--text-muted); font-weight: 400; }
+.table tbody tr.row-editing  { background: #F5F5FF; }
+.table tbody tr.row-selected { background: #EAF3FF; }
+.table tbody tr.row-selected td { color: var(--text); }
+.table.no-select { user-select: none; }
+
+.row-actions { white-space: nowrap; text-align: right; }
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #1A1A2E;
+  color: #fff;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+.bulk-bar.confirming { background: #3A1010; }
+.bulk-count { font-size: 13px; font-weight: 500; flex: 1; }
+.btn.danger  { background: var(--danger); color: #fff; }
+.btn.danger:hover:not(:disabled) { background: #A82626; }
+
+.btn-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.btn-link:hover { color: var(--text); background: #EBEBF0; }
+.btn-link.danger:hover { color: var(--danger); background: #FFD6D6; }
 
 /* ── Badges ──────────────────────────────────────── */
 .badge {
@@ -518,6 +552,12 @@ body {
 .qty-input:focus { border-color: var(--accent); }
 
 /* ── Error ───────────────────────────────────────── */
+.form-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: -4px 0 8px;
+}
+
 .form-error {
   background: rgba(201, 48, 48, 0.07);
   border: 1px solid rgba(201, 48, 48, 0.2);

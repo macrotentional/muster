@@ -63,7 +63,7 @@ export default function Dashboard() {
             <th>Status</th>
             <th>Borrower</th>
             <th>Since</th>
-            <th>Due back</th>
+            <th>Due</th>
           </tr>
         </thead>
         <tbody>
@@ -106,7 +106,7 @@ function StatCard({ label, value, variant, Icon, active, onClick }) {
 
 function StatusBadge({ item }) {
   if (item.condition === 'damaged') return <span className="badge danger">Damaged</span>
-  if (item.condition === 'retired') return <span className="badge muted">Retired</span>
+  if (item.condition === 'retired') return <span className="badge muted">Lost/unknown</span>
   if (item.status === 'checked_out') return <span className="badge warning">Out</span>
   return <span className="badge success">Available</span>
 }
