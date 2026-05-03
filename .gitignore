@@ -1,0 +1,39 @@
+# Environment & credentials
+.env
+.env.local
+.env.*.local
+config.js
+config.local.js
+config.secret.js
+*.key
+*.pem
+*.p12
+*.cert
+secrets.json
+credentials.json
+
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
