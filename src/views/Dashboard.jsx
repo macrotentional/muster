@@ -54,7 +54,7 @@ export default function Dashboard() {
         <StatCard label="Damaged"     value={stats.damaged}   Icon={AlertTriangle} active={filter === 'damaged'}   onClick={() => setFilter('damaged')}   variant="danger"  />
       </div>
 
-      <table className="table">
+      <table className="table table-dashboard">
         <thead>
           <tr>
             <th>Item</th>

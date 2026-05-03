@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const CATALOG = {
@@ -405,7 +406,7 @@ export default function Inventory() {
 
       <div className="inventory-count">{filtered.length} item{filtered.length !== 1 ? 's' : ''}</div>
 
-      <table className={`table${isDragging ? ' no-select' : ''}`}>
+      <table className={`table table-inventory${isDragging ? ' no-select' : ''}`}>
         <thead>
           <tr>
             <th>Tag</th>
@@ -455,8 +456,8 @@ export default function Inventory() {
                   </>
                 ) : (
                   <>
-                    <button className="btn-link" onClick={() => startEdit(item)}>Edit</button>
-                    <button className="btn-link danger" onClick={() => { setConfirmDelete(item.id); cancelEdit() }}>Remove</button>
+                    <button className="icon-btn" title="Edit" onClick={() => startEdit(item)}><Pencil size={14} /></button>
+                    <button className="icon-btn danger" title="Remove" onClick={() => { setConfirmDelete(item.id); cancelEdit() }}><Trash2 size={14} /></button>
                   </>
                 )}
               </td>

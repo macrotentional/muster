@@ -251,14 +251,33 @@ body {
 .table td.overdue { color: var(--danger); font-weight: 500; }
 .table td.empty   { color: var(--text-muted); text-align: center; padding: 48px 16px; font-size: 13px; }
 
-.table tbody tr.row-out { background: #E4E4EB; }
-.table tbody tr.row-out td { color: var(--text-muted); font-weight: 400; }
-.table tbody tr.row-editing  { background: #F5F5FF; }
-.table tbody tr.row-selected { background: #EAF3FF; }
-.table tbody tr.row-selected td { color: var(--text); }
+.table tbody tr { cursor: default; }
+.table tbody tr:hover td { background: #F0F0F5; }
+.table tbody tr.row-out td { background: #E4E4EB; color: var(--text-muted); font-weight: 400; }
+.table tbody tr.row-out:hover td { background: #DCDCE6; }
+.table tbody tr.row-editing td { background: #F5F5FF; }
+.table tbody tr.row-editing:hover td { background: #ECECFF; }
+.table tbody tr.row-selected td { background: #EAF3FF; color: var(--text); }
+.table tbody tr.row-selected:hover td { background: #D8ECFF; }
 .table.no-select { user-select: none; }
 
-.row-actions { white-space: nowrap; text-align: right; }
+.row-actions { white-space: nowrap; text-align: right; opacity: 0; transition: opacity 0.1s; }
+.table tbody tr:hover .row-actions,
+.table tbody tr.row-editing .row-actions { opacity: 1; }
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px 5px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+.icon-btn:hover { color: var(--text); background: #E0E0EA; }
+.icon-btn.danger:hover { color: var(--danger); background: #FFD6D6; }
 
 .bulk-bar {
   display: flex;
@@ -579,4 +598,106 @@ input[type="checkbox"] {
   height: 15px;
   cursor: pointer;
   flex-shrink: 0;
+}
+
+/* ── Mobile ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  html, body { overflow-x: hidden; }
+
+  /* Nav moves to bottom */
+  .nav {
+    position: fixed;
+    bottom: 0;
+    top: auto;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 58px;
+    padding: 0;
+    border-top: 1px solid #1E1E28;
+  }
+
+  .nav-brand { display: none; }
+
+  .nav-tabs { width: 100%; }
+
+  .nav-tab {
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 10px;
+    padding: 6px 4px;
+    border-bottom: none;
+    border-top: 2px solid transparent;
+    justify-content: center;
+    height: 100%;
+  }
+
+  .nav-tab.active {
+    border-top-color: #F5C518;
+    border-bottom-color: transparent;
+  }
+
+  /* Main */
+  .main {
+    padding: 14px 12px;
+    padding-bottom: 74px;
+    max-width: 100%;
+  }
+
+  /* Stats — 2×2 grid */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-card { min-width: 0; padding: 14px 16px 16px; }
+  .stat-value { font-size: 26px; }
+
+  /* Toolbar */
+  .toolbar { flex-wrap: wrap; gap: 8px; }
+  .toolbar-left { width: 100%; flex-wrap: wrap; }
+  .search { width: 100%; flex: 1; }
+
+  /* Checkout stacks vertically */
+  .checkout-layout { grid-template-columns: 1fr; }
+  .checkout-form { position: static; }
+
+  /* Forms */
+  .card { padding: 16px; }
+  .add-item-form .field { min-width: 100%; }
+  .bulk-bar { flex-wrap: wrap; }
+
+  /* ── Column hiding per table ─────────────────────── */
+
+  /* Dashboard: keep Item(1), Status(4), Borrower(5) — hide Category(2), Size(3), Since(6), Due(7) */
+  .table-dashboard th:nth-child(2), .table-dashboard td:nth-child(2),
+  .table-dashboard th:nth-child(3), .table-dashboard td:nth-child(3),
+  .table-dashboard th:nth-child(6), .table-dashboard td:nth-child(6),
+  .table-dashboard th:nth-child(7), .table-dashboard td:nth-child(7) { display: none; }
+
+  /* Inventory: keep Name(2), Condition(5), Actions(7) — hide Tag(1), Category(3), Size(4), Location(6) */
+  .table-inventory th:nth-child(1), .table-inventory td:nth-child(1),
+  .table-inventory th:nth-child(3), .table-inventory td:nth-child(3),
+  .table-inventory th:nth-child(4), .table-inventory td:nth-child(4),
+  .table-inventory th:nth-child(6), .table-inventory td:nth-child(6) { display: none; }
+
+  /* CheckOut: keep Checkbox(1), Item(2), Size(4) — hide Category(3), Location(5) */
+  .table-checkout th:nth-child(3), .table-checkout td:nth-child(3),
+  .table-checkout th:nth-child(5), .table-checkout td:nth-child(5) { display: none; }
+
+  /* CheckIn: keep Checkbox(1), Item(2), Borrower(4), Condition(7) — hide Size(3), Since(5), Due(6), Notes(8) */
+  .table-checkin th:nth-child(3), .table-checkin td:nth-child(3),
+  .table-checkin th:nth-child(5), .table-checkin td:nth-child(5),
+  .table-checkin th:nth-child(6), .table-checkin td:nth-child(6),
+  .table-checkin th:nth-child(8), .table-checkin td:nth-child(8) { display: none; }
+
+  /* Condition selector fits on one line */
+  .condition-option { font-size: 10px; padding: 3px 7px; }
+
+  /* Submit bar stacks */
+  .submit-bar { flex-direction: column; align-items: stretch; }
+  .field.inline { flex-direction: column; align-items: stretch; }
+  .field.inline input { width: 100%; }
 }

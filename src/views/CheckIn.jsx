@@ -112,7 +112,7 @@ export default function CheckIn({ onDone }) {
       </div>
 
       <form onSubmit={handleSubmit}>
-        <table className="table selectable">
+        <table className="table table-checkin selectable">
           <thead>
             <tr>
               <th></th>

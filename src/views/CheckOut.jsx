@@ -97,7 +97,7 @@ export default function CheckOut({ onDone }) {
           />
         </div>
 
-        <table className="table selectable">
+        <table className="table table-checkout selectable">
           <thead>
             <tr>
               <th></th>
