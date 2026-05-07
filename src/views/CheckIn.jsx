@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import ScanInput from '../components/ScanInput'
 
 function titleCase(str) {
   return str.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase())
@@ -62,6 +63,44 @@ export default function CheckIn({ onDone }) {
     }))
   }
 
+  function setAllCondition(condition) {
+    setSelected(prev => {
+      const next = {}
+      for (const [id, val] of Object.entries(prev)) {
+        next[id] = { ...val, condition, notes: condition === 'good' ? '' : val.notes }
+      }
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelected(prev => {
+      const next = { ...prev }
+      for (const item of filtered) {
+        if (!next[item.checkout_item_id]) {
+          next[item.checkout_item_id] = { condition: 'good', notes: '', item_id: item.id }
+        }
+      }
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelected({})
+  }
+
+  function handleScan(code) {
+    const upper = code.toUpperCase()
+    const item = items.find(i => i.asset_tag?.toUpperCase() === upper)
+    if (!item) return { ok: false, text: `${code}: not currently checked out` }
+    if (selected[item.checkout_item_id]) return { ok: true, text: `${item.asset_tag} already in return` }
+    setSelected(prev => ({
+      ...prev,
+      [item.checkout_item_id]: { condition: 'good', notes: '', item_id: item.id },
+    }))
+    return { ok: true, text: `+ ${item.asset_tag} ${item.name}${item.size ? ` (${item.size})` : ''}` }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     const entries = Object.entries(selected)
@@ -69,25 +108,29 @@ export default function CheckIn({ onDone }) {
     setSubmitting(true)
 
     const now = new Date().toISOString()
+    const staff = staffName.trim()
 
-    for (const [checkoutItemId, { condition, notes, item_id }] of entries) {
-      await supabase
+    // Mark all selected checkout_items as returned, in parallel
+    await Promise.all(entries.map(([checkoutItemId, { condition, notes }]) =>
+      supabase
         .from('checkout_items')
         .update({
           checked_in_at: now,
-          checked_in_by: staffName.trim(),
+          checked_in_by: staff,
           condition_on_return: condition,
           return_notes: notes.trim() || null,
         })
         .eq('id', checkoutItemId)
+    ))
 
-      if (condition === 'damaged') {
-        await supabase.from('items').update({ condition: 'damaged' }).eq('id', item_id)
-      }
-      if (condition === 'lost') {
-        await supabase.from('items').update({ condition: 'retired', notes: 'Reported lost' }).eq('id', item_id)
-      }
-    }
+    // Group item-condition updates so each touches the DB once
+    const damagedIds = entries.filter(([, v]) => v.condition === 'damaged').map(([, v]) => v.item_id)
+    const lostIds    = entries.filter(([, v]) => v.condition === 'lost').map(([, v]) => v.item_id)
+
+    await Promise.all([
+      damagedIds.length > 0 && supabase.from('items').update({ condition: 'damaged' }).in('id', damagedIds),
+      lostIds.length    > 0 && supabase.from('items').update({ condition: 'retired', notes: 'Reported lost' }).in('id', lostIds),
+    ].filter(Boolean))
 
     onDone()
   }
@@ -110,6 +153,25 @@ export default function CheckIn({ onDone }) {
           onChange={e => setSearch(e.target.value)}
         />
       </div>
+
+      <ScanInput onScan={handleScan} placeholder="Scan barcode or type asset tag, then Enter…" />
+
+      {selectedCount > 0 && (
+        <div className="bulk-shortcuts">
+          <span className="bulk-shortcuts-label">{selectedCount} selected · set all to:</span>
+          <button type="button" className="condition-option active good"  onClick={() => setAllCondition('good')}>Good</button>
+          <button type="button" className="condition-option active damaged" onClick={() => setAllCondition('damaged')}>Damaged</button>
+          <button type="button" className="condition-option active lost"  onClick={() => setAllCondition('lost')}>Lost</button>
+          <span className="bulk-shortcuts-spacer" />
+          <button type="button" className="btn-link" onClick={selectAll}>Select all visible</button>
+          <button type="button" className="btn-link" onClick={clearSelection}>Clear</button>
+        </div>
+      )}
+      {selectedCount === 0 && filtered.length > 0 && (
+        <div className="bulk-shortcuts subtle">
+          <button type="button" className="btn-link" onClick={selectAll}>Select all visible ({filtered.length})</button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <table className="table table-checkin selectable">

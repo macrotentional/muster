@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, Printer } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import PrintLabels from '../components/PrintLabels'
 
 const CATALOG = {
   'Footwear': {
@@ -67,6 +68,10 @@ export default function Inventory() {
   const [bulkForm, setBulkForm] = useState(BLANK_BULK)
   const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false)
   const [bulkSaving, setBulkSaving] = useState(false)
+
+  // Barcode label printing
+  const [printItems, setPrintItems] = useState(null)         // active modal items
+  const [pendingPrint, setPendingPrint] = useState(null)     // items just added, awaiting confirm
 
   async function fetchItems() {
     const { data, err } = await supabase.from('items').select('*').order('name')
@@ -152,12 +157,13 @@ export default function Inventory() {
         notes: form.notes.trim() || null,
       })
     }
-    const { error: err } = await supabase.from('items').insert(toInsert)
+    const { data: created, error: err } = await supabase.from('items').insert(toInsert).select()
     if (err) {
       setError(err.message)
     } else {
       setForm(BLANK)
       setShowForm(false)
+      setPendingPrint(created || [])
       fetchItems()
     }
     setSubmitting(false)
@@ -397,11 +403,40 @@ export default function Inventory() {
             <>
               <span className="bulk-count">{selectedIds.size} selected</span>
               <button className="btn" onClick={() => { setBulkEditMode(true); cancelEdit(); setShowForm(false) }}>Edit</button>
+              <button
+                className="btn"
+                onClick={() => setPrintItems(items.filter(i => selectedIds.has(i.id)))}
+              >
+                <Printer size={14} style={{ verticalAlign: '-2px', marginRight: 6 }} />
+                Print label{selectedIds.size !== 1 ? 's' : ''}
+              </button>
               <button className="btn danger" onClick={() => setBulkConfirmDelete(true)}>Delete</button>
               <button className="btn-link" onClick={() => { setSelectedIds(new Set()); setLastSelectedIdx(null) }}>Clear</button>
             </>
           )}
         </div>
+      )}
+
+      {/* Post-add print prompt */}
+      {pendingPrint && pendingPrint.length > 0 && (
+        <div className="print-prompt">
+          <span>
+            <strong>{pendingPrint.length}</strong> item{pendingPrint.length !== 1 ? 's' : ''} added.
+          </span>
+          <button
+            className="btn primary"
+            onClick={() => { setPrintItems(pendingPrint); setPendingPrint(null) }}
+          >
+            <Printer size={14} style={{ verticalAlign: '-2px', marginRight: 6 }} />
+            Print {pendingPrint.length} label{pendingPrint.length !== 1 ? 's' : ''}
+          </button>
+          <button className="btn-link" onClick={() => setPendingPrint(null)}>Skip</button>
+        </div>
+      )}
+
+      {/* Print modal */}
+      {printItems && (
+        <PrintLabels items={printItems} onClose={() => setPrintItems(null)} />
       )}
 
       <div className="inventory-count">{filtered.length} item{filtered.length !== 1 ? 's' : ''}</div>

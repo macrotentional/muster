@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import ScanInput from '../components/ScanInput'
 
 function titleCase(str) {
   return str.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase())
@@ -50,6 +51,15 @@ export default function CheckOut({ onDone }) {
     })
   }
 
+  function handleScan(code) {
+    const upper = code.toUpperCase()
+    const item = items.find(i => i.asset_tag?.toUpperCase() === upper)
+    if (!item) return { ok: false, text: `${code}: not available (checked out, damaged, or unknown)` }
+    if (selected.has(item.id)) return { ok: true, text: `${item.asset_tag} already in cart` }
+    setSelected(prev => new Set(prev).add(item.id))
+    return { ok: true, text: `+ ${item.asset_tag} ${item.name}${item.size ? ` (${item.size})` : ''}` }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     const hasContact = borrowerEmail.trim() || borrowerPhone.trim()
@@ -96,6 +106,8 @@ export default function CheckOut({ onDone }) {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+
+        <ScanInput onScan={handleScan} placeholder="Scan barcode or type asset tag, then Enter…" />
 
         <table className="table table-checkout selectable">
           <thead>
